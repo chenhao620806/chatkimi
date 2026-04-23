@@ -1069,7 +1069,8 @@ export default function Home() {
 
     // 流式读取响应
     const reader = response.body?.getReader();
-    const decoder = new TextDecoder();
+    // 明确使用 UTF-8 解码器
+    const decoder = new TextDecoder("utf-8", { fatal: false });
       let fullContent = "";
       let reasoningContent = "";
 
@@ -1102,10 +1103,10 @@ export default function Home() {
           let chunk = "";
           if (value && value.length > 0) {
             try {
-              // 安全解码：过滤掉可能导致问题的字符
+              // 安全解码：使用 fatal: false 让解码器忽略无效字符
               const rawText = decoder.decode(value, { stream: true });
-              // 过滤所有控制字符和 BOM
-              chunk = rawText.replace(/[\u0000-\u001F\uFEFF]/g, "");
+              // 过滤所有控制字符和 BOM（包括 \uFEFF 和其他不可见字符）
+              chunk = rawText.replace(/[\u0000-\u001F\u007F-\u009F\uFEFF\uFFFE\uFFFF]/g, "");
             } catch (decodeError) {
               console.warn("Decode warning:", decodeError);
             }

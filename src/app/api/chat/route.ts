@@ -88,9 +88,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 流式响应
-    const encoder = new TextEncoder();
-    const stream = new ReadableStream({
+    // 直接返回原始流，避免编码转换导致的问题
+    // 同时过滤掉响应中的 BOM 字符
+    const transformStream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
         if (!reader) {
@@ -98,49 +98,23 @@ export async function POST(request: NextRequest) {
           return;
         }
 
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        // 过滤 BOM 字符的函数
-        const removeBOM = (str: string) => str.replace(/\uFEFF/g, "");
-
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = removeBOM(line.slice(6));
-                if (data === "[DONE]") {
-                  controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-                } else {
-                  controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-                }
-              }
-            }
+            
+            // 直接转发原始字节数据
+            controller.enqueue(value);
           }
-          // 处理剩余 buffer
-          if (buffer.startsWith("data: ")) {
-            const data = removeBOM(buffer.slice(6));
-            if (data !== "[DONE]") {
-              controller.enqueue(encoder.encode(`data: ${data}\n\n`));
-            }
-          }
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         } catch (e) {
           console.error("Stream error:", e);
         } finally {
-          controller.close();
+          try { controller.close(); } catch (e) {}
         }
       },
     });
 
-    return new Response(stream, {
+    return new Response(transformStream, {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
