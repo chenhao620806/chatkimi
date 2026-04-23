@@ -1100,15 +1100,15 @@ export default function Home() {
           }
 
           let chunk = "";
-          try {
-            // 安全解码：过滤掉可能导致问题的字符
-            const uint8Array = new Uint8Array(value);
-            const rawText = decoder.decode(uint8Array, { stream: true });
-            // 过滤所有控制字符和 BOM
-            chunk = rawText.replace(/[\u0000-\u001F\uFEFF]/g, "");
-          } catch (decodeError) {
-            console.warn("Decode warning:", decodeError);
-            continue;
+          if (value && value.length > 0) {
+            try {
+              // 安全解码：过滤掉可能导致问题的字符
+              const rawText = decoder.decode(value, { stream: true });
+              // 过滤所有控制字符和 BOM
+              chunk = rawText.replace(/[\u0000-\u001F\uFEFF]/g, "");
+            } catch (decodeError) {
+              console.warn("Decode warning:", decodeError);
+            }
           }
           
           const lines = chunk.split("\n");
