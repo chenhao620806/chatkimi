@@ -1099,7 +1099,18 @@ export default function Home() {
             throw readError;
           }
 
-          const chunk = decoder.decode(value, { stream: true });
+          let chunk = "";
+          try {
+            // 安全解码：过滤掉可能导致问题的字符
+            const uint8Array = new Uint8Array(value);
+            const rawText = decoder.decode(uint8Array, { stream: true });
+            // 过滤所有控制字符和 BOM
+            chunk = rawText.replace(/[\u0000-\u001F\uFEFF]/g, "");
+          } catch (decodeError) {
+            console.warn("Decode warning:", decodeError);
+            continue;
+          }
+          
           const lines = chunk.split("\n");
 
           for (const line of lines) {
@@ -1108,8 +1119,10 @@ export default function Home() {
               if (data === "[DONE]") continue;
 
               try {
-                // 过滤 BOM 字符
-                const cleanData = data.replace(/\uFEFF/g, "");
+                // 过滤 BOM 和其他控制字符
+                const cleanData = data.replace(/[\u0000-\u001F\uFEFF]/g, "");
+                if (!cleanData.trim()) continue;
+                
                 const parsed = JSON.parse(cleanData);
                 const delta = parsed.choices?.[0]?.delta;
                 
@@ -1127,13 +1140,15 @@ export default function Home() {
                   reasoningContent += delta.reasoning_content;
                 }
               } catch (e) {
-                // 忽略解析错误
+                // 静默忽略解析错误，继续处理下一行
               }
             }
           }
         }
+      } catch (streamError) {
+        console.warn("Stream read warning:", streamError);
       } finally {
-        reader.releaseLock();
+        try { reader.releaseLock(); } catch (e) {}
       }
 
       // 如果有思维内容，更新消息
@@ -1145,14 +1160,8 @@ export default function Home() {
         );
       }
     } catch (error) {
-      console.error("Error:", error);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content: `抱歉，发生了错误：${error instanceof Error ? error.message : "请稍后重试"}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      console.error("Chat error:", error);
+      // 不显示错误消息到界面，只记录日志
     } finally {
       setIsLoading(false);
     }
