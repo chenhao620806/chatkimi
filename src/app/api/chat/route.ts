@@ -101,6 +101,9 @@ export async function POST(request: NextRequest) {
         const decoder = new TextDecoder();
         let buffer = "";
 
+        // 过滤 BOM 字符的函数
+        const removeBOM = (str: string) => str.replace(/\uFEFF/g, "");
+
         try {
           while (true) {
             const { done, value } = await reader.read();
@@ -112,7 +115,7 @@ export async function POST(request: NextRequest) {
 
             for (const line of lines) {
               if (line.startsWith("data: ")) {
-                const data = line.slice(6);
+                const data = removeBOM(line.slice(6));
                 if (data === "[DONE]") {
                   controller.enqueue(encoder.encode("data: [DONE]\n\n"));
                 } else {
@@ -123,7 +126,7 @@ export async function POST(request: NextRequest) {
           }
           // 处理剩余 buffer
           if (buffer.startsWith("data: ")) {
-            const data = buffer.slice(6);
+            const data = removeBOM(buffer.slice(6));
             if (data !== "[DONE]") {
               controller.enqueue(encoder.encode(`data: ${data}\n\n`));
             }
