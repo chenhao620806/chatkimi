@@ -56,14 +56,13 @@ export async function POST(request: NextRequest) {
       return msg;
     });
 
-    // 构建 API 请求参数
+    // 构建 API 请求参数（非流式）
     const requestBody: any = {
       model: model,
       messages: processedMessages,
     };
 
-    // 添加所有可选参数（强制流式输出）
-    requestBody.stream = true;
+    // 禁用流式输出，返回完整响应
     if (temperature !== undefined) requestBody.temperature = temperature;
     if (max_tokens !== undefined) requestBody.max_tokens = max_tokens;
     if (top_p !== undefined) requestBody.top_p = top_p;
@@ -73,7 +72,7 @@ export async function POST(request: NextRequest) {
     if (thinking_budget !== undefined) requestBody.thinking_budget = thinking_budget;
     if (stop !== undefined) requestBody.stop = stop;
 
-    // 调用硅基流动 API（流式输出）
+    // 调用硅基流动 API（非流式）
     const response = await fetch(`${BASE_URL}/chat/completions`, {
       method: "POST",
       headers: {
@@ -92,60 +91,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 流式转发，移除上游响应中的 BOM 字节（0xEF 0xBB 0xBF）
-    // 注意：完全不透传上游 headers，避免非 ASCII 字符导致浏览器 ByteString 错误
-    const transformStream = new ReadableStream({
-      async start(controller) {
-        const reader = response.body?.getReader();
-        if (!reader) {
-          controller.close();
-          return;
-        }
-        let bomStripped = false;
-        let buffer = new Uint8Array(0);
-
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            // 拼接数据（处理 BOM 跨 chunk 的情况）
-            const merged = new Uint8Array(buffer.length + value.length);
-            merged.set(buffer);
-            merged.set(value, buffer.length);
-            buffer = merged;
-
-            if (!bomStripped && buffer.length >= 3
-                && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
-              controller.enqueue(buffer.slice(3));
-              buffer = new Uint8Array(0);
-              bomStripped = true;
-            } else if (bomStripped) {
-              controller.enqueue(buffer);
-              buffer = new Uint8Array(0);
-            }
-          }
-          // 处理剩余数据
-          if (buffer.length > 0) {
-            controller.enqueue(buffer);
-          }
-        } catch (e) {
-          console.error("Stream error:", e);
-        } finally {
-          try { controller.close(); } catch (e) {}
-        }
-      },
-    });
-
-    return new Response(transformStream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-transform",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",
-      },
-    });
+    // 一次性返回完整响应
+    const result = await response.json();
+    return NextResponse.json(result);
   } catch (error) {
     console.error("Chat error:", error);
     return NextResponse.json(

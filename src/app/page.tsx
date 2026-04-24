@@ -1067,99 +1067,19 @@ export default function Home() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-    // 流式读取响应
-    const reader = response.body?.getReader();
-    // 明确使用 UTF-8 解码器
-    const decoder = new TextDecoder("utf-8", { fatal: false });
-      let fullContent = "";
-      let reasoningContent = "";
+      // 一次性读取响应（非流式）
+      const result = await response.json();
+      const content = result.choices?.[0]?.message?.content || "";
+      const reasoning = result.choices?.[0]?.message?.reasoning_content || "";
 
-      if (!reader) {
-        throw new Error("无法读取响应流");
-      }
-
-      try {
-        while (true) {
-          let value;
-          try {
-            const result = await reader.read();
-            value = result.value;
-            if (result.done) break;
-          } catch (readError: any) {
-            // 如果是 abort 请求，退出循环
-            if (readError.name === 'AbortError') {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantMessageId 
-                    ? { ...m, content: m.content + "\n\n*[已停止生成]*" }
-                    : m
-                )
-              );
-              break;
-            }
-            throw readError;
-          }
-
-          let chunk = "";
-          if (value && value.length > 0) {
-            try {
-              // 安全解码：使用 fatal: false 让解码器忽略无效字符
-              const rawText = decoder.decode(value, { stream: true });
-              // 过滤所有控制字符和 BOM（包括 \uFEFF 和其他不可见字符）
-              chunk = rawText.replace(/[\u0000-\u001F\u007F-\u009F\uFEFF\uFFFE\uFFFF]/g, "");
-            } catch (decodeError) {
-              console.warn("Decode warning:", decodeError);
-            }
-          }
-          
-          const lines = chunk.split("\n");
-
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.slice(6);
-              if (data === "[DONE]") continue;
-
-              try {
-                // 过滤 BOM 和其他控制字符
-                const cleanData = data.replace(/[\u0000-\u001F\uFEFF]/g, "");
-                if (!cleanData.trim()) continue;
-                
-                const parsed = JSON.parse(cleanData);
-                const delta = parsed.choices?.[0]?.delta;
-                
-                if (delta?.content) {
-                  fullContent += delta.content;
-                  setMessages((prev) =>
-                    prev.map((m) =>
-                      m.id === assistantMessageId ? { ...m, content: fullContent } : m
-                    )
-                  );
-                }
-                
-                // 处理思维模式
-                if (delta?.reasoning_content) {
-                  reasoningContent += delta.reasoning_content;
-                }
-              } catch (e) {
-                // 静默忽略解析错误，继续处理下一行
-              }
-            }
-          }
-        }
-      } catch (streamError) {
-        console.warn("Stream read warning:", streamError);
-      } finally {
-        try { reader.releaseLock(); } catch (e) {}
-      }
-
-      // 如果有思维内容，更新消息
-      if (reasoningContent) {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId ? { ...m, reasoning: reasoningContent } : m
-          )
-        );
-      }
+      // 更新消息
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content, reasoning: reasoning || undefined }
+            : m
+        )
+      );
     } catch (error) {
       console.error("Chat error:", error);
       const errorMsg = error instanceof Error ? error.message : String(error);
