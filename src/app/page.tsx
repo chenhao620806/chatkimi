@@ -1166,7 +1166,6 @@ export default function Home() {
               }
             }
           }
-        } finally {
           reader.releaseLock();
         }
 
