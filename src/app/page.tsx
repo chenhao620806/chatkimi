@@ -1179,9 +1179,14 @@ export default function Home() {
         );
       }
     } catch (error) {
+      // 忽略用户点击停止时的 AbortError
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request was cancelled by user");
+        return;
+      }
       console.error("Chat error:", error);
       const errorMsg = error instanceof Error ? error.message : String(error);
-      // 找最后一条 assistant 消息显示错误（不依赖 try 内部变量）
+      // 找最后一条 assistant 消息显示错误
       setMessages((prev) => {
         const idx = [...prev].reverse().findIndex(m => m.role === "assistant");
         if (idx === -1) return prev;
