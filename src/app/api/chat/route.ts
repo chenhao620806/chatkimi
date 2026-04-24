@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 流式转发，移除上游响应中的 BOM 字节（0xEF 0xBB 0xBF）
-    const BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
+    // 注意：完全不透传上游 headers，避免非 ASCII 字符导致浏览器 ByteString 错误
     const transformStream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
@@ -102,19 +102,32 @@ export async function POST(request: NextRequest) {
           return;
         }
         let bomStripped = false;
+        let buffer = new Uint8Array(0);
 
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
 
-            if (!bomStripped && value.length >= 3
-                && value[0] === 0xef && value[1] === 0xbb && value[2] === 0xbf) {
-              controller.enqueue(value.slice(3));
+            // 拼接数据（处理 BOM 跨 chunk 的情况）
+            const merged = new Uint8Array(buffer.length + value.length);
+            merged.set(buffer);
+            merged.set(value, buffer.length);
+            buffer = merged;
+
+            if (!bomStripped && buffer.length >= 3
+                && buffer[0] === 0xef && buffer[1] === 0xbb && buffer[2] === 0xbf) {
+              controller.enqueue(buffer.slice(3));
+              buffer = new Uint8Array(0);
               bomStripped = true;
-            } else {
-              controller.enqueue(value);
+            } else if (bomStripped) {
+              controller.enqueue(buffer);
+              buffer = new Uint8Array(0);
             }
+          }
+          // 处理剩余数据
+          if (buffer.length > 0) {
+            controller.enqueue(buffer);
           }
         } catch (e) {
           console.error("Stream error:", e);
@@ -125,10 +138,12 @@ export async function POST(request: NextRequest) {
     });
 
     return new Response(transformStream, {
+      status: 200,
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        Connection: "keep-alive",
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache, no-transform",
+        "Connection": "keep-alive",
+        "X-Accel-Buffering": "no",
       },
     });
   } catch (error) {

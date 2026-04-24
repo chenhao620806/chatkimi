@@ -1162,7 +1162,13 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Chat error:", error);
-      // 不显示错误消息到界面，只记录日志
+      // 显示错误到界面
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId ? { ...m, content: `⚠️ ${errorMsg}` } : m
+        )
+      );
     } finally {
       setIsLoading(false);
     }
