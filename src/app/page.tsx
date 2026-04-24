@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // pdfjsDist 会延迟初始化
 let pdfjsLib: any = null;
@@ -64,20 +66,45 @@ const renderContentWithImages = (content: string, attachments?: Attachment[]) =>
         key++;
       }
       
-      // 添加代码块
+      // 添加代码块 - 使用语法高亮
       const lang = match[1] || "text";
       const code = match[2].trim();
       parts.push(
-        <pre key={`code-${match.index}`} className="my-3 p-4 rounded-lg overflow-x-auto" style={{
-          background: "rgba(0, 0, 0, 0.5)",
+        <div key={`code-${match.index}`} className="my-3 rounded-lg overflow-hidden" style={{
           border: "1px solid rgba(0, 255, 255, 0.3)",
           boxShadow: "0 0 10px rgba(0, 255, 255, 0.1)",
-          fontFamily: "'Fira Code', 'Consolas', monospace",
-          fontSize: "13px",
-          lineHeight: "1.6"
         }}>
-          <code style={{ color: "#00ff88" }}>{code}</code>
-        </pre>
+          {lang && (
+            <div style={{
+              background: "rgba(0, 0, 0, 0.4)",
+              padding: "4px 12px",
+              fontSize: "12px",
+              color: "#00ffff",
+              borderBottom: "1px solid rgba(0, 255, 255, 0.2)",
+              fontFamily: "monospace",
+            }}>
+              {lang}
+            </div>
+          )}
+          <SyntaxHighlighter
+            language={lang === "text" ? "plaintext" : lang}
+            style={vscDarkPlus as any}
+            customStyle={{
+              margin: 0,
+              padding: "16px",
+              fontSize: "13px",
+              lineHeight: "1.6",
+              background: "rgba(0, 0, 0, 0.6)",
+            }}
+            codeTagProps={{
+              style: {
+                fontFamily: "'Fira Code', 'Consolas', 'Monaco', monospace",
+              }
+            }}
+          >
+            {code}
+          </SyntaxHighlighter>
+        </div>
       );
       
       lastIndex = match.index + match[0].length;
@@ -106,10 +133,11 @@ const renderContentWithImages = (content: string, attachments?: Attachment[]) =>
       }
       parts.push(
         <code key={`${baseKey}-${idx++}`} className="px-1.5 py-0.5 rounded text-sm" style={{
-          background: "rgba(255, 0, 128, 0.2)",
-          color: "#ff0080",
+          background: "rgba(255, 255, 255, 0.1)",
+          color: "#e0e0e0",
           fontFamily: "'Fira Code', 'Consolas', monospace",
-          fontSize: "0.9em"
+          fontSize: "0.9em",
+          borderRadius: "4px",
         }}>
           {match[1]}
         </code>
