@@ -7,6 +7,15 @@ const BASE_URL = "https://api.siliconflow.cn/v1";
 const SUPPORTED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
+// 清理字符串中的 BOM 字符 (0xFEFF)，防止 Vercel 服务器报错
+const removeBom = (str: string): string => {
+  // 移除开头的 BOM 字符
+  if (str.charCodeAt(0) === 0xFEFF) {
+    return str.slice(1);
+  }
+  return str;
+};
+
 interface MessageContent {
   type: "text" | "image_url";
   text?: string;
@@ -93,6 +102,21 @@ export async function POST(request: NextRequest) {
 
     // 一次性返回完整响应
     const result = await response.json();
+    
+    // 清理响应中的 BOM 字符，防止 "Cannot convert argument to a ByteString" 错误
+    if (result.choices && Array.isArray(result.choices)) {
+      result.choices.forEach((choice: any) => {
+        if (choice.message) {
+          if (typeof choice.message.content === "string") {
+            choice.message.content = removeBom(choice.message.content);
+          }
+          if (choice.message.reasoning_content) {
+            choice.message.reasoning_content = removeBom(choice.message.reasoning_content);
+          }
+        }
+      });
+    }
+    
     return NextResponse.json(result);
   } catch (error) {
     console.error("Chat error:", error);
