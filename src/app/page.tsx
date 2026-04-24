@@ -1067,9 +1067,6 @@ export default function Home() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      // 保存 id 到 ref，确保 catch 块能访问
-      let currentAssistantId = assistantMessageId;
-
     // 流式读取响应
     const reader = response.body?.getReader();
     // 明确使用 UTF-8 解码器
@@ -1166,11 +1163,13 @@ export default function Home() {
     } catch (error) {
       console.error("Chat error:", error);
       const errorMsg = error instanceof Error ? error.message : String(error);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === currentAssistantId ? { ...m, content: `⚠️ ${errorMsg}` } : m
-        )
-      );
+      // 找最后一条 assistant 消息显示错误（不依赖 try 内部变量）
+      setMessages((prev) => {
+        const idx = [...prev].reverse().findIndex(m => m.role === "assistant");
+        if (idx === -1) return prev;
+        const realIdx = prev.length - 1 - idx;
+        return prev.map((m, i) => i === realIdx ? { ...m, content: `⚠️ ${errorMsg}` } : m);
+      });
     } finally {
       setIsLoading(false);
     }
