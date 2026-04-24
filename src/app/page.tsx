@@ -1065,7 +1065,10 @@ export default function Home() {
         content: "",
         timestamp: new Date(),
       };
-    setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      // 保存 id 到 ref，确保 catch 块能访问
+      let currentAssistantId = assistantMessageId;
 
     // 流式读取响应
     const reader = response.body?.getReader();
@@ -1162,17 +1165,12 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Chat error:", error);
-      // 显示错误到界面（assistantMessageId 可能在 try 外不可用，用最后一条消息）
       const errorMsg = error instanceof Error ? error.message : String(error);
-      setMessages((prev) => {
-        const lastMsg = prev[prev.length - 1];
-        if (lastMsg && lastMsg.role === "assistant" && !lastMsg.content) {
-          return prev.map((m, i) =>
-            i === prev.length - 1 ? { ...m, content: `⚠️ ${errorMsg}` } : m
-          );
-        }
-        return prev;
-      });
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === currentAssistantId ? { ...m, content: `⚠️ ${errorMsg}` } : m
+        )
+      );
     } finally {
       setIsLoading(false);
     }
