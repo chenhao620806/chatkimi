@@ -36,7 +36,11 @@ export async function POST(request: NextRequest) {
     }
 
     if (!API_KEY) {
-      return NextResponse.json({ error: "API key not configured" }, { status: 500 });
+      console.error("SILICONFLOW_API_KEY environment variable is not set");
+      return NextResponse.json(
+        { error: "API key not configured. Please set SILICONFLOW_API_KEY in Vercel environment variables." },
+        { status: 500 }
+      );
     }
 
     // 处理消息 - 支持多模态内容
