@@ -1179,9 +1179,19 @@ export default function Home() {
         );
       }
     } catch (error) {
-      // 忽略用户点击停止时的 AbortError
+      // 忽略用户点击停止时的 AbortError，但保留已输出的内容
       if (error instanceof Error && error.name === "AbortError") {
         console.log("Request was cancelled by user");
+        // 保留已收到的内容
+        if (fullContent || reasoning) {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === assistantMessageId
+                ? { ...m, content: fullContent, reasoning: reasoning || undefined }
+                : m
+            )
+          );
+        }
         return;
       }
       console.error("Chat error:", error);
