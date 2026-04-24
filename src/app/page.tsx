@@ -1027,6 +1027,16 @@ export default function Home() {
       // 创建 AbortController 用于停止
       abortControllerRef.current = new AbortController();
 
+      // 先创建空消息占位（用于流式更新）
+      const assistantMessageId = (Date.now() + 1).toString();
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+
       // 流式响应处理
       const response = await fetch("/api/chat", {
         method: "POST",
@@ -1054,32 +1064,76 @@ export default function Home() {
         } catch {
           errorMessage = `Error ${response.status}`;
         }
-        throw new Error(errorMessage);
+        // 显示错误消息
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: `Error: ${errorMessage}` }
+              : m
+          )
+        );
+        return;
       }
 
-      // 创建空消息占位
-      const assistantMessageId = (Date.now() + 1).toString();
-      const assistantMessage: Message = {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, assistantMessage]);
+      // 流式读取响应
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let fullContent = "";
+      let reasoning = "";
 
-      // 一次性读取响应（非流式）
-      const result = await response.json();
-      const content = result.choices?.[0]?.message?.content || "";
-      const reasoning = result.choices?.[0]?.message?.reasoning_content || "";
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-      // 更新消息
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId
-            ? { ...m, content, reasoning: reasoning || undefined }
-            : m
-        )
-      );
+            const chunk = decoder.decode(value, { stream: true });
+            const lines = chunk.split("\n");
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                const data = line.slice(6).trim();
+                if (data === "[DONE]") continue;
+
+                try {
+                  const parsed = JSON.parse(data);
+                  const delta = parsed.choices?.[0]?.delta;
+
+                  // 处理内容增量
+                  if (delta?.content) {
+                    fullContent += delta.content;
+                    setMessages((prev) =>
+                      prev.map((m) =>
+                        m.id === assistantMessageId
+                          ? { ...m, content: fullContent }
+                          : m
+                      )
+                    );
+                  }
+
+                  // 处理思维内容增量
+                  if (delta?.reasoning_content) {
+                    reasoning += delta.reasoning_content;
+                  }
+                } catch {
+                  // 忽略解析错误
+                }
+              }
+            }
+          }
+        } finally {
+          reader.releaseLock();
+        }
+
+        // 更新最终消息
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMessageId
+              ? { ...m, content: fullContent, reasoning: reasoning || undefined }
+              : m
+          )
+        );
+      }
     } catch (error) {
       console.error("Chat error:", error);
       const errorMsg = error instanceof Error ? error.message : String(error);
