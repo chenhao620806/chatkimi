@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
-import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import SyntaxHighlighter from "react-syntax-highlighter";
+import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 // pdfjsDist 会延迟初始化
 let pdfjsLib: any = null;
@@ -66,29 +66,45 @@ const renderContentWithImages = (content: string, attachments?: Attachment[]) =>
         key++;
       }
       
-      // 添加代码块 - 使用语法高亮
+      // 添加代码块 - 使用语法高亮 + 复制按钮
       const lang = match[1] || "text";
       const code = match[2].trim();
       parts.push(
-        <div key={`code-${match.index}`} className="my-3 rounded-lg overflow-hidden" style={{
+        <div key={`code-${match.index}`} className="my-3 rounded-lg overflow-hidden relative group" style={{
           border: "1px solid rgba(0, 255, 255, 0.3)",
           boxShadow: "0 0 10px rgba(0, 255, 255, 0.1)",
         }}>
-          {lang && (
-            <div style={{
-              background: "rgba(0, 0, 0, 0.4)",
-              padding: "4px 12px",
-              fontSize: "12px",
-              color: "#00ffff",
-              borderBottom: "1px solid rgba(0, 255, 255, 0.2)",
-              fontFamily: "monospace",
-            }}>
-              {lang}
-            </div>
-          )}
+          <div style={{
+            background: "rgba(0, 0, 0, 0.4)",
+            padding: "4px 12px",
+            fontSize: "12px",
+            color: "#00ffff",
+            borderBottom: "1px solid rgba(0, 255, 255, 0.2)",
+            fontFamily: "monospace",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+          }}>
+            <span>{lang}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(code);
+                // 可以添加复制成功的提示
+              }}
+              className="opacity-0 group-hover:opacity-100 transition-opacity px-2 py-1 rounded text-xs"
+              style={{
+                background: "rgba(0, 255, 255, 0.2)",
+                color: "#00ffff",
+                border: "1px solid rgba(0, 255, 255, 0.3)",
+              }}
+              title="复制代码"
+            >
+              复制
+            </button>
+          </div>
           <SyntaxHighlighter
             language={lang === "text" ? "plaintext" : lang}
-            style={vscDarkPlus as any}
+            style={atomDark as any}
             customStyle={{
               margin: 0,
               padding: "16px",
