@@ -92,8 +92,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 直接返回原始流，避免编码转换导致的问题
-    // 同时过滤掉响应中的 BOM 字符
+    // 流式转发，移除上游响应中的 BOM 字节（0xEF 0xBB 0xBF）
+    const BOM = new Uint8Array([0xef, 0xbb, 0xbf]);
     const transformStream = new ReadableStream({
       async start(controller) {
         const reader = response.body?.getReader();
@@ -101,14 +101,20 @@ export async function POST(request: NextRequest) {
           controller.close();
           return;
         }
+        let bomStripped = false;
 
         try {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
-            
-            // 直接转发原始字节数据
-            controller.enqueue(value);
+
+            if (!bomStripped && value.length >= 3
+                && value[0] === 0xef && value[1] === 0xbb && value[2] === 0xbf) {
+              controller.enqueue(value.slice(3));
+              bomStripped = true;
+            } else {
+              controller.enqueue(value);
+            }
           }
         } catch (e) {
           console.error("Stream error:", e);
