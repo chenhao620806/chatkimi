@@ -1034,6 +1034,11 @@ export default function Home() {
     setAttachments([]);
     setIsLoading(true);
 
+    // 声明在 try 外，以便 AbortError 时也能访问
+    let fullContent = "";
+    let reasoning = "";
+    let assistantMessageId = "";
+    
     try {
       // 构建所有消息的内容（支持多模态）
       const processedMessages = allMessages.map((m) => {
@@ -1072,7 +1077,7 @@ export default function Home() {
       abortControllerRef.current = new AbortController();
 
       // 先创建空消息占位（用于流式更新）
-      const assistantMessageId = (Date.now() + 1).toString();
+      assistantMessageId = (Date.now() + 1).toString();
       const assistantMessage: Message = {
         id: assistantMessageId,
         role: "assistant",
@@ -1122,67 +1127,61 @@ export default function Home() {
       // 流式读取响应
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      // 在 try 外声明，以便 AbortError 时也能访问
-      let fullContent = "";
-      let reasoning = "";
 
-      try {
-        if (reader) {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
 
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n");
 
-            for (const line of lines) {
-              if (line.startsWith("data: ")) {
-                const data = line.slice(6).trim();
-                if (data === "[DONE]") continue;
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const data = line.slice(6).trim();
+              if (data === "[DONE]") continue;
 
-                try {
-                  const parsed = JSON.parse(data);
-                  const delta = parsed.choices?.[0]?.delta;
+              try {
+                const parsed = JSON.parse(data);
+                const delta = parsed.choices?.[0]?.delta;
 
-                  // 处理内容增量
-                  if (delta?.content) {
-                    fullContent += delta.content;
-                    setMessages((prev) =>
-                      prev.map((m) =>
-                        m.id === assistantMessageId
-                          ? { ...m, content: fullContent }
-                          : m
-                      )
-                    );
-                  }
-
-                  // 处理思维内容增量
-                  if (delta?.reasoning_content) {
-                    reasoning += delta.reasoning_content;
-                  }
-                } catch {
-                  // 忽略解析错误
+                // 处理内容增量
+                if (delta?.content) {
+                  fullContent += delta.content;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMessageId
+                        ? { ...m, content: fullContent }
+                        : m
+                    )
+                  );
                 }
+
+                // 处理思维内容增量
+                if (delta?.reasoning_content) {
+                  reasoning += delta.reasoning_content;
+                }
+              } catch {
+                // 忽略解析错误
               }
             }
           }
-          reader.releaseLock();
         }
-
-        // 更新最终消息
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMessageId
-              ? { ...m, content: fullContent, reasoning: reasoning || undefined }
-              : m
-          )
-        );
+        reader.releaseLock();
       }
+
+      // 更新最终消息
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === assistantMessageId
+            ? { ...m, content: fullContent, reasoning: reasoning || undefined }
+            : m
+        )
+      );
     } catch (error) {
       // 忽略用户点击停止时的 AbortError，但保留已输出的内容
       if (error instanceof Error && error.name === "AbortError") {
         console.log("Request was cancelled by user");
-        // 保留已收到的内容
         if (fullContent || reasoning) {
           setMessages((prev) =>
             prev.map((m) =>
