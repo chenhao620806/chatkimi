@@ -1162,13 +1162,17 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Chat error:", error);
-      // 显示错误到界面
+      // 显示错误到界面（assistantMessageId 可能在 try 外不可用，用最后一条消息）
       const errorMsg = error instanceof Error ? error.message : String(error);
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMessageId ? { ...m, content: `⚠️ ${errorMsg}` } : m
-        )
-      );
+      setMessages((prev) => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg && lastMsg.role === "assistant" && !lastMsg.content) {
+          return prev.map((m, i) =>
+            i === prev.length - 1 ? { ...m, content: `⚠️ ${errorMsg}` } : m
+          );
+        }
+        return prev;
+      });
     } finally {
       setIsLoading(false);
     }
