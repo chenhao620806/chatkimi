@@ -1122,11 +1122,12 @@ export default function Home() {
       // 流式读取响应
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
+      // 在 try 外声明，以便 AbortError 时也能访问
       let fullContent = "";
       let reasoning = "";
 
-      if (reader) {
-        try {
+      try {
+        if (reader) {
           while (true) {
             const { done, value } = await reader.read();
             if (done) break;
